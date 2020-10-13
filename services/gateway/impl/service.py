@@ -3,7 +3,7 @@ from flask_cors import CORS
 from services.commun.queue import ClientQueueServiceImpl
 from services.commun import logger
 
-logging = logger.create_logger('gateway', force_to_recreate=True)
+logging = logger.create_logger('impl', force_to_recreate=True)
 
 app = Flask(__name__)
 cors = CORS(app)
