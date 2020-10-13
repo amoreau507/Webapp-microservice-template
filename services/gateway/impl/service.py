@@ -1,7 +1,7 @@
 from flask import Flask
 from flask_cors import CORS
-from services.commun.queue import ClientQueueServiceImpl
-from services.commun import logger
+from services.common.queue import ClientQueueServiceImpl
+from services.common import logger
 
 logging = logger.create_logger('impl', force_to_recreate=True)
 

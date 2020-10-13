@@ -1,7 +1,7 @@
 import uuid
 
-from services.commun import logger
-from services.commun.queue import ServerQueueServiceImpl
+from services.common import logger
+from services.common.queue import ServerQueueServiceImpl
 
 logging = logger.create_logger('impl', force_to_recreate=True)
 
