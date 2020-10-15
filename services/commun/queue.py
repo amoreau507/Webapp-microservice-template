@@ -1,6 +1,8 @@
 import pika
 import uuid
 
+ENCODING = "utf-8"
+
 
 class ServerQueueServiceImpl(object):
     def __init__(self, username, password, host, port, queue_keys, callback):
@@ -16,7 +18,7 @@ class ServerQueueServiceImpl(object):
         self.channel.start_consuming()
 
     def default_callback(self, ch, method, props, body):
-        response = self.callback(body)
+        response = self.callback(body.decode(ENCODING))
         ch.basic_publish(
             exchange='',
             routing_key=props.reply_to,
@@ -48,14 +50,14 @@ class ClientQueueServiceImpl(object):
         if self.coor_id == props.correlation_id:
             self.response = body
 
-    def get_response(self):
+    def get_response(self, body=''):
         self.response = None
         self.coor_id = str(uuid.uuid4())
         self.channel.basic_publish(
             exchange='',
             routing_key=self.queue_keys,
             properties=pika.BasicProperties(reply_to=self.callback_queue, correlation_id=self.coor_id),
-            body=''
+            body=body,
         )
         while self.response is None:
             self.connection.process_data_events()

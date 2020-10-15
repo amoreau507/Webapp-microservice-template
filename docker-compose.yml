@@ -12,3 +12,11 @@ services:
     ports:
       - 5672:5672
       - 15672:15672
+  db:
+    image: mongo:4.2
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${DB_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${DB_PASSWORD}
+      - MONGO_INITDB_DATABASE=${DB_NAME}
+    ports:
+      - "27017:27017"
