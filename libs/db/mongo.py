@@ -2,8 +2,9 @@ import uuid
 
 from pymongo import MongoClient
 from datetime import datetime
-from services.commun import logger
-from services.commun.db import exceptions
+
+from libs.db import exceptions
+from libs.logger import logger
 
 logging = logger.create_logger('db', force_to_recreate=True)
 

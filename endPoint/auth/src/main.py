@@ -1,22 +1,24 @@
 import jwt
 import uuid
 
-from flask import Flask, g, request, redirect, url_for, jsonify, make_response
+from flask import Flask, request, jsonify, make_response
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
-from flask_cors import CORS
+from flask_cors import CORS, cross_origin
 from datetime import datetime, timedelta
-from services.commun.db.exceptions import *
-from services.commun.db.environment import Environment
-from services.commun.db.mongo import Mongo
-from services.commun.queue import ClientQueueServiceImpl
-from services.commun import logger
+from libs.db.environment import Environment
+from libs.db.exceptions import DuplicateException
+from libs.db.mongo import Mongo
+from libs.queue.ClientQueueServiceImpl import ClientQueueServiceImpl
+from libs.logger import logger
 
-logging = logger.create_logger('impl', force_to_recreate=True)
+logging = logger.create_logger('src', force_to_recreate=True)
 
 app = Flask(__name__)
-cors = CORS(app)
+cors = CORS(app, supports_credentials=True)
 app.config['SECRET_KEY'] = 'acme'
+app.config['CORS_HEADERS'] = ['Content-Type']
+
 env_config = Environment()
 db = Mongo(
     env_config.db_hostname,
@@ -31,19 +33,16 @@ hello_word_mq = ClientQueueServiceImpl('username', 'password', 'localhost', 5672
 def login_required(func):
     @wraps(func)
     def decorated_function(*args, **kwargs):
-        token = None
-
-        if 'WEB_APP_TOKEN' in request.cookies:
-            token = request.cookies['WEB_APP_TOKEN']
+        token = request.environ['HTTP_AUTHORIZATION'][2:-1]
 
         if not token:
-            return jsonify({'message': 'a valid token is missing'})
+            return make_response('could not verify', 401, {'message': 'a valid token is missing'})
 
         try:
             data = jwt.decode(token, app.config['SECRET_KEY'])
             current_user = db.get_user_by_email(data['email'])
         except:
-            return jsonify({'message': 'token is invalid'})
+            return make_response('Invalid authentication', 409, {'message': 'token is invalid'})
 
         return func(*args, **kwargs)
 
@@ -54,6 +53,27 @@ def login_required(func):
 @login_required
 def index():
     return hello_word_mq.get_response(body=str(uuid.uuid4()))
+
+
+@app.route('/login', methods=['GET', 'POST'])
+@cross_origin()
+def login_user():
+    auth = request.authorization
+
+    if not auth or not auth.username or not auth.password:
+        return make_response('could not verify', 401, {'WWW.Authentication': 'Basic realm: "login required"'})
+
+    user = db.get_user_by_email(auth.username)
+    user_agent = request.headers["user-agent"]
+
+    if user and check_password_hash(user.password, auth.password):
+        token = jwt.encode({"user-agent": user_agent, 'public_id': user.public_id, 'email': user.email, 'isAdmin': user.isAdmin, 'exp': datetime.utcnow() + timedelta(minutes=30)}, app.config['SECRET_KEY'])
+
+        resp = jsonify({'token': str(token)})
+        resp.status_code = 200
+        return resp
+
+    return make_response('Bad password', 401, {'WWW.Authentication': 'Basic realm: "login required"'})
 
 
 @app.route('/register', methods=['GET', 'POST'])
@@ -71,26 +91,6 @@ def signup_user():
     logging.info("New user: %s" % new_user.to_json())
 
     return jsonify({'message': ("New user: %s" % new_user.to_json())})
-
-
-@app.route('/login', methods=['GET', 'POST'])
-def login_user():
-    auth = request.authorization
-
-    if not auth or not auth.username or not auth.password:
-        return make_response('could not verify', 401, {'WWW.Authentication': 'Basic realm: "login required"'})
-
-    user = db.get_user_by_email(auth.username)
-    user_agent = request.headers["user-agent"]
-
-    if check_password_hash(user.password, auth.password):
-        token = jwt.encode({"user-agent": user_agent, 'public_id': user.public_id, 'email': user.email, 'isAdmin': user.isAdmin, 'exp': datetime.utcnow() + timedelta(minutes=30)}, app.config['SECRET_KEY'])
-
-        resp = make_response(jsonify({'message': "Login successful"}), 200)
-        resp.set_cookie('WEB_APP_TOKEN', token)
-        return resp
-
-    return make_response('could not verify', 401, {'WWW.Authentication': 'Basic realm: "login required"'})
 
 
 if __name__ == "__main__":
